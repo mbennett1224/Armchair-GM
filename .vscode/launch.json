@@ -1,0 +1,29 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      // 🧠 Backend (Node.js + Express)
+      "type": "node",
+      "request": "launch",
+      "name": "Launch Backend Server",
+      "program": "${workspaceFolder}/backend/server.js",
+      "envFile": "${workspaceFolder}/backend/.env",
+      "console": "integratedTerminal"
+    },
+    {
+      // 🎨 Frontend (React/Vite)
+      "type": "chrome",
+      "request": "launch",
+      "name": "Launch Frontend",
+      "url": "http://localhost:3000",
+      "webRoot": "${workspaceFolder}/frontend"
+    }
+  ],
+  "compounds": [
+    {
+      // 🚀 Run both at once
+      "name": "Launch Full Stack (Frontend + Backend)",
+      "configurations": ["Launch Backend Server", "Launch Frontend"]
+    }
+  ]
+}
