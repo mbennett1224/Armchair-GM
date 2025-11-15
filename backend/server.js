@@ -58,54 +58,51 @@ app.get("/api/teams/:id/players", async (req, res) => {
   const teamId = req.params.id;
 
   try {
+    // Use "rosterFull" to ensure data always comes through
     const response = await fetch(
-      `https://statsapi.mlb.com/api/v1/teams/${teamId}/roster`
+      `https://statsapi.mlb.com/api/v1/teams/${teamId}/roster/rosterFull`
     );
     const data = await response.json();
 
-    if (!data.roster) {
+    if (!data.roster || data.roster.length === 0) {
       return res.status(404).json({ error: "No roster data found." });
     }
 
-    // Map roster players and fetch stats for each one
-    const players = await Promise.all(
-      data.roster.map(async (player) => {
-        const playerId = player.person.id;
-
-        // Fetch individual player stats
-        const statsResponse = await fetch(
-          `https://statsapi.mlb.com/api/v1/people/${playerId}/stats?stats=season`
-        );
-        const statsData = await statsResponse.json();
-
-        let avg = "N/A";
-        let era = "N/A";
-        let war = "N/A";
-
-        if (statsData.stats && statsData.stats[0]?.splits?.length > 0) {
-          const split = statsData.stats[0].splits[0].stat;
-          if (split.avg) avg = split.avg;
-          if (split.era) era = split.era;
-          if (split.war) war = split.war;
-        }
-
-        return {
-          id: playerId,
-          name: player.person.fullName,
-          position: player.position.name,
-          jerseyNumber: player.jerseyNumber,
-          avg,
-          war,
-          era,
-        };
-      })
-    );
+    // Map players
+    const players = data.roster.map((player) => ({
+      id: player.person.id,
+      name: player.person.fullName,
+      position: player.position.abbreviation,
+      positionName: player.position.name,
+      jerseyNumber: player.jerseyNumber || "—",
+      batSide: player.person.batSide?.code || "—",
+      pitchHand: player.person.pitchHand?.code || "—",
+    }));
 
     res.json(players);
   } catch (error) {
     console.error("Error fetching players:", error);
     res.status(500).json({ error: "Failed to fetch player data" });
   }
+});
+
+app.get("/api/freeagents", (req, res) => {
+  // For demo, static list. Replace with DB select from free_agents table.
+  const freeAgents = [
+    { PlayerID: 9001, Name: "Free Agent A", Position: "1B", WAR: 1.8, Salary: null },
+    { PlayerID: 9002, Name: "Reliever B", Position: "P", WAR: 0.9, Salary: null },
+    { PlayerID: 9003, Name: "Utility C", Position: "SS", WAR: 2.1, Salary: null },
+  ];
+  res.json(freeAgents);
+});
+
+// accept POST to add player to roster: body { teamId, position, player }
+app.post("/api/roster/update", express.json(), async (req, res) => {
+  const { teamId, position, player } = req.body;
+  // TODO: persist swap to DB; for now just echo
+  console.log("Roster update:", { teamId, position, player });
+  // Ideally: update Players table or create Roster table record
+  res.json({ ok: true, teamId, position, player });
 });
 
 // ✅ Root test route
