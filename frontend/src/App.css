@@ -1,38 +1,69 @@
-.App {
-  text-align: center;
+.app-container {
+  display: grid;
+  grid-template-columns: 1fr 500px 1fr;
+  height: 100vh;
+  gap: 20px;
+  padding: 20px;
 }
 
-.App-logo {
-  height: 40vmin;
-  pointer-events: none;
+/* LEFT PANEL */
+.left-panel {
+  padding: 10px;
 }
 
-@media (prefers-reduced-motion: no-preference) {
-  .App-logo {
-    animation: App-logo-spin infinite 20s linear;
-  }
+.app-title {
+  font-size: 32px;
+  margin-bottom: 10px;
 }
 
-.App-header {
-  background-color: #282c34;
-  min-height: 100vh;
+.team-name {
+  font-size: 24px;
+  margin-top: 20px;
+  margin-bottom: 5px;
+}
+
+.team-dropdown {
+  width: 80%;
+  padding: 8px;
+  margin-bottom: 20px;
+}
+
+.panel-title {
+  font-size: 20px;
+  margin-bottom: 10px;
+}
+
+.free-agent-list {
+  list-style: none;
+  padding-left: 0;
+}
+
+.free-agent-item {
+  padding: 8px;
+  margin-bottom: 5px;
+  background: #f3f3f3;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.free-agent-item:hover {
+  background: #ddd;
+}
+
+/* CENTER PANEL */
+.center-panel {
   display: flex;
-  flex-direction: column;
-  align-items: center;
   justify-content: center;
-  font-size: calc(10px + 2vmin);
-  color: white;
+  align-items: center;
 }
 
-.App-link {
-  color: #61dafb;
+/* RIGHT PANEL */
+.right-panel {
+  padding: 10px;
 }
 
-@keyframes App-logo-spin {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
+.stats-box {
+  background: #f3f3f3;
+  padding: 15px;
+  border-radius: 8px;
 }

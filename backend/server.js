@@ -12,7 +12,9 @@ const PORT = process.env.PORT || 8080;
 app.use(cors());
 app.use(express.json());
 
-// ✅ MySQL connection
+// -------------------------
+// MySQL connection
+// -------------------------
 const db = mysql.createConnection({
   host: process.env.DB_HOST,
   port: process.env.DB_PORT || 3306,
@@ -29,15 +31,15 @@ db.connect((err) => {
   }
 });
 
-// ✅ Route 1 — Get all 30 MLB teams
+// -------------------------
+// GET all MLB teams
+// -------------------------
 app.get("/api/teams", async (req, res) => {
   try {
     const response = await fetch("https://statsapi.mlb.com/api/v1/teams?sportId=1");
     const data = await response.json();
 
-    if (!data.teams) {
-      return res.status(404).json({ error: "No teams found." });
-    }
+    if (!data.teams) return res.status(404).json({ error: "No teams found." });
 
     const teams = data.teams.map((team) => ({
       id: team.id,
@@ -53,64 +55,105 @@ app.get("/api/teams", async (req, res) => {
   }
 });
 
-// ✅ Route 2 — Get all players for a specific team (with stats)
+// -------------------------
+// GET players + live stats for selected team
+// -------------------------
 app.get("/api/teams/:id/players", async (req, res) => {
   const teamId = req.params.id;
 
   try {
-    // Use "rosterFull" to ensure data always comes through
+    // Best hydrate chain for LIVE stats
     const response = await fetch(
-      `https://statsapi.mlb.com/api/v1/teams/${teamId}/roster/rosterFull`
+      `https://statsapi.mlb.com/api/v1/teams/${teamId}/roster/rosterFull` +
+      `?hydrate=person(stats(group=[hitting,pitching],type=[season]))`
     );
+
     const data = await response.json();
 
     if (!data.roster || data.roster.length === 0) {
       return res.status(404).json({ error: "No roster data found." });
     }
 
-    // Map players
-    const players = data.roster.map((player) => ({
-      id: player.person.id,
-      name: player.person.fullName,
-      position: player.position.abbreviation,
-      positionName: player.position.name,
-      jerseyNumber: player.jerseyNumber || "—",
-      batSide: player.person.batSide?.code || "—",
-      pitchHand: player.person.pitchHand?.code || "—",
-    }));
+    const players = data.roster.map((player) => {
+      const p = player.person;
+
+      // --- Extract stats safely ---
+      const hittingStats = p.stats?.find((s) => s.group?.displayName === "hitting")?.splits?.[0]?.stat || {};
+      const pitchingStats = p.stats?.find((s) => s.group?.displayName === "pitching")?.splits?.[0]?.stat || {};
+
+      return {
+        id: p.id,
+        name: p.fullName,
+        position: player.position?.abbreviation || "",
+        positionName: player.position?.name || "",
+        jerseyNumber: player.jerseyNumber || "",
+        batSide: p.batSide?.code || "—",
+        pitchHand: p.pitchHand?.code || "—",
+
+        // -------------------------
+        // Hitting stats (App.js expects these)
+        // -------------------------
+        stats: {
+          avg: hittingStats.avg || null,
+          slg: hittingStats.slg || null,
+          ops: hittingStats.ops || null,
+          homeRuns: hittingStats.homeRuns || null,
+          rbi: hittingStats.rbi || null,
+          hits: hittingStats.hits || null,
+          baseOnBalls: hittingStats.baseOnBalls || null,
+          strikeOuts: hittingStats.strikeOuts || null,
+
+          // -------------------------
+          // Pitching stats
+          // -------------------------
+          era: pitchingStats.era || null,
+          whip: pitchingStats.whip || null,
+          inningsPitched: pitchingStats.inningsPitched || null,
+          strikeOutsPitching: pitchingStats.strikeOuts || null,
+          baseOnBallsPitching: pitchingStats.baseOnBalls || null,
+          hitsAllowed: pitchingStats.hits || null,
+
+          gamesStarted: pitchingStats.gamesStarted || null
+        }
+      };
+    });
 
     res.json(players);
   } catch (error) {
-    console.error("Error fetching players:", error);
-    res.status(500).json({ error: "Failed to fetch player data" });
+    console.error("Error fetching players/stats:", error);
+    res.status(500).json({ error: "Failed to fetch player stats" });
   }
 });
 
+// -------------------------
+// FREE AGENTS (placeholder)
+// -------------------------
 app.get("/api/freeagents", (req, res) => {
-  // For demo, static list. Replace with DB select from free_agents table.
   const freeAgents = [
-    { PlayerID: 9001, Name: "Free Agent A", Position: "1B", WAR: 1.8, Salary: null },
-    { PlayerID: 9002, Name: "Reliever B", Position: "P", WAR: 0.9, Salary: null },
-    { PlayerID: 9003, Name: "Utility C", Position: "SS", WAR: 2.1, Salary: null },
+    { PlayerID: 9001, Name: "Free Agent A", Position: "1B", WAR: 1.8 },
+    { PlayerID: 9002, Name: "Reliever B", Position: "P", WAR: 0.9 },
+    { PlayerID: 9003, Name: "Utility C", Position: "SS", WAR: 2.1 },
   ];
   res.json(freeAgents);
 });
 
-// accept POST to add player to roster: body { teamId, position, player }
-app.post("/api/roster/update", express.json(), async (req, res) => {
+// -------------------------
+// Update roster (future DB use)
+// -------------------------
+app.post("/api/roster/update", express.json(), (req, res) => {
   const { teamId, position, player } = req.body;
-  // TODO: persist swap to DB; for now just echo
-  console.log("Roster update:", { teamId, position, player });
-  // Ideally: update Players table or create Roster table record
+
+  console.log("Roster update request:", { teamId, position, player });
+
   res.json({ ok: true, teamId, position, player });
 });
 
-// ✅ Root test route
+// -------------------------
 app.get("/", (req, res) => {
   res.send("⚾ Armchair GM API is running!");
 });
+// -------------------------
 
-// ✅ Start server
 app.listen(PORT, () => {
   console.log(`🚀 Server running on http://localhost:${PORT}`);
 });
