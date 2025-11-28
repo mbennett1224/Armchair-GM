@@ -3,6 +3,11 @@ import cors from "cors";
 import fetch from "node-fetch";
 import mysql from "mysql2";
 import dotenv from "dotenv";
+import axios from "axios";
+import cron from "node-cron";
+import fs from "fs";
+import { exec } from "child_process";
+
 
 dotenv.config();
 
@@ -30,6 +35,11 @@ db.connect((err) => {
     console.log("✅ Connected to MySQL!");
   }
 });
+
+// -------------------------------------------
+// AUTO-UPDATE FREE AGENTS WEEKLY (ESPN SCRAPER)
+// -------------------------------------------
+
 
 // -------------------------
 // GET all MLB teams
@@ -77,7 +87,6 @@ app.get("/api/teams/:id/players", async (req, res) => {
     const players = data.roster.map((player) => {
       const p = player.person;
 
-      // --- Extract stats safely ---
       const hittingStats = p.stats?.find((s) => s.group?.displayName === "hitting")?.splits?.[0]?.stat || {};
       const pitchingStats = p.stats?.find((s) => s.group?.displayName === "pitching")?.splits?.[0]?.stat || {};
 
@@ -89,11 +98,8 @@ app.get("/api/teams/:id/players", async (req, res) => {
         jerseyNumber: player.jerseyNumber || "",
         batSide: p.batSide?.code || "—",
         pitchHand: p.pitchHand?.code || "—",
-
-        // -------------------------
-        // Hitting stats (App.js expects these)
-        // -------------------------
         stats: {
+          // Hitting
           avg: hittingStats.avg || null,
           slg: hittingStats.slg || null,
           ops: hittingStats.ops || null,
@@ -102,17 +108,13 @@ app.get("/api/teams/:id/players", async (req, res) => {
           hits: hittingStats.hits || null,
           baseOnBalls: hittingStats.baseOnBalls || null,
           strikeOuts: hittingStats.strikeOuts || null,
-
-          // -------------------------
-          // Pitching stats
-          // -------------------------
+          // Pitching
           era: pitchingStats.era || null,
           whip: pitchingStats.whip || null,
           inningsPitched: pitchingStats.inningsPitched || null,
           strikeOutsPitching: pitchingStats.strikeOuts || null,
           baseOnBallsPitching: pitchingStats.baseOnBalls || null,
           hitsAllowed: pitchingStats.hits || null,
-
           gamesStarted: pitchingStats.gamesStarted || null
         }
       };
@@ -125,27 +127,55 @@ app.get("/api/teams/:id/players", async (req, res) => {
   }
 });
 
-// -------------------------
-// FREE AGENTS (placeholder)
-// -------------------------
-app.get("/api/freeagents", (req, res) => {
-  const freeAgents = [
-    { PlayerID: 9001, Name: "Free Agent A", Position: "1B", WAR: 1.8 },
-    { PlayerID: 9002, Name: "Reliever B", Position: "P", WAR: 0.9 },
-    { PlayerID: 9003, Name: "Utility C", Position: "SS", WAR: 2.1 },
-  ];
-  res.json(freeAgents);
-});
 
+app.get("/api/freeagents", (req, res) => {
+  try {
+    if (!fs.existsSync("free_agents.json")) {
+      console.error("❌ free_agents.json not found!");
+      return res.status(500).json({ error: "free_agents.json is missing" });
+    }
+
+    let data = JSON.parse(fs.readFileSync("free_agents.json", "utf8"));
+
+    // 🔍 Ensure data is an array
+    if (!Array.isArray(data)) {
+      console.error("❌ free_agents.json is not an array!");
+      return res.status(500).json({ error: "Invalid free_agents.json format" });
+    }
+
+    // 🧹 Remove bad or unknown entries
+    data = data.filter(p =>
+      p &&
+      p.name &&
+      p.name.trim() !== "" &&
+      p.name.toLowerCase() !== "unknown player"
+    );
+
+    console.log(`📁 Serving ${data.length} free agents from file.`);
+
+    return res.json(data);
+
+  } catch (err) {
+    console.error("❌ Error reading free_agents.json:", err);
+    return res.status(500).json({ error: "Could not load free agents" });
+  }
+});
 // -------------------------
 // Update roster (future DB use)
 // -------------------------
-app.post("/api/roster/update", express.json(), (req, res) => {
+app.post("/api/roster/update", (req, res) => {
   const { teamId, position, player } = req.body;
 
-  console.log("Roster update request:", { teamId, position, player });
+  console.log("Roster update:", { teamId, position, player });
 
-  res.json({ ok: true, teamId, position, player });
+  // Always succeed — free agents & MLB players
+  return res.json({
+    success: true,
+    message: "Player signed",
+    teamId,
+    position,
+    player
+  });
 });
 
 // -------------------------
