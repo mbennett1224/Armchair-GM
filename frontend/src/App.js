@@ -202,7 +202,7 @@ function App() {
     };
 
     try {
-      await axios.post("/api/roster/update", {
+      await axios.post("http://localhost:8080/api/roster/update", {
         teamId: selectedTeam,
         position: signPosition,
         player: newPlayer,

@@ -172,7 +172,7 @@ body {
    POSITION COORDINATES
    ========================================================= */
 .pitcher { top: 270px; left: 200px; }
-.catcher { top: 350px; left: 200px; } /* <-- Note: keep as 'catcher' in your file (no space) */
+.catcher { top: 380px; left: 200px; } /* <-- Note: keep as 'catcher' in your file (no space) */
 
 .first-base { top: 310px; left: 370px; }
 .second-base { top: 210px; left: 310px; }
