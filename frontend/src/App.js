@@ -36,34 +36,34 @@ function App() {
   }, []);
 
   const loadFreeAgents = async () => {
-  setFaLoading(true);
-  try {
-    const res = await axios.get("/free_agents.json");
+    setFaLoading(true);
+    try {
+      const res = await axios.get("http://localhost:8080/api/freeagents");
 
-    const normalized = res.data.map((fa, index) => ({
-      id: `FA-${index}`,          // guaranteed unique
-      name: fa.name || "Unknown",
-      position: fa.position || "N/A",
-      team: "Free Agent",
-      age: fa.age ?? null,
+      const normalized = res.data.map((fa, index) => ({
+        id: fa.id ?? `FA-${index}`,
+        name: fa.name || "Unknown",
+        position: fa.position || "N/A",
+        team: fa.team || "Free Agent",
+        age: fa.age ?? null,
 
-      // Basic empty stats so UI does NOT break
-      war: fa.war ?? 0,
-      ops: fa.ops ?? null,
-      era: fa.era ?? null,
+        // Basic empty stats so UI does NOT break
+        war: fa.war ?? 0,
+        ops: fa.ops ?? null,
+        era: fa.era ?? null,
 
-      // store raw object
-      raw: fa
-    }));
+        // store raw object
+        raw: fa
+      }));
 
-    setFreeAgents(normalized);
-  } catch (err) {
-    console.error("Error loading free agents:", err);
-    setFreeAgents([]);
-  } finally {
-    setFaLoading(false);
-  }
-};
+      setFreeAgents(normalized);
+    } catch (err) {
+      console.error("Error loading free agents:", err);
+      setFreeAgents([]);
+    } finally {
+      setFaLoading(false);
+    }
+  };
 
 
   // ---------------------------------------------------------
@@ -139,8 +139,20 @@ function App() {
   const loadPlayerStats = async (player) => {
     if (!player) return;
     if (!player.id || player.id.toString().startsWith("FA-")) {
-      // Free agent created by you → no stat lookup
-      setPlayerStats(null);
+      // Free agent: use stored WAR/OPS/ERA if present
+      const war = player.stats?.war ?? player.war ?? null;
+      const ops = player.stats?.ops ?? player.ops ?? null;
+      const era = player.stats?.era ?? player.era ?? null;
+      if (war != null || ops != null || era != null) {
+        setPlayerStats({
+          type: player.position === "P" ? "pitcher" : "hitter",
+          war,
+          ops,
+          era
+        });
+      } else {
+        setPlayerStats(null);
+      }
       return;
     }
 
@@ -198,7 +210,16 @@ function App() {
       name: faToSign.name,
       position: signPosition,
       jerseyNumber: "",
-      stats: {}
+      war: faToSign.war ?? null,
+      ops: faToSign.ops ?? null,
+      era: faToSign.era ?? null,
+      age: faToSign.age ?? null,
+      stats: {
+        war: faToSign.war ?? null,
+        ops: faToSign.ops ?? null,
+        era: faToSign.era ?? null
+      },
+      raw: faToSign
     };
 
     try {
@@ -252,7 +273,7 @@ function App() {
 
                     <div style={{ fontSize: "0.85rem", color: "#bbb" }}>
                       {fa.position} 
-                      {fa.war != null ? ` • WAR ${fa.war}` : ""}
+                      {fa.war != null ? ` • war ${fa.war}` : ""}
                     </div>
                   </div>
 
@@ -350,6 +371,19 @@ function App() {
                 {selectedPlayer.jerseyNumber || "—"}
               </p>
 
+              {/* Free agent quick stats */}
+              {selectedPlayer.id?.toString().startsWith("FA-") && (
+                <>
+                  <h4>Free Agent Stats</h4>
+                  <p><strong>WAR:</strong> {playerStats?.war ?? selectedPlayer.war ?? "N/A"}</p>
+                  <p><strong>OPS:</strong> {playerStats?.ops ?? selectedPlayer.ops ?? "N/A"}</p>
+                  {normalizePosition(selectedPlayer.position) === "P" && (
+                    <p><strong>ERA:</strong> {playerStats?.era ?? selectedPlayer.era ?? "N/A"}</p>
+                  )}
+                </>
+              )}
+
+
               {/* HITTER STATS */}
               {playerStats?.type === "hitter" && (
                 <>
@@ -425,3 +459,5 @@ function App() {
 }
 
 export default App;
+
+

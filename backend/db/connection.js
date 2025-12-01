@@ -1,19 +1,16 @@
-import mysql from 'mysql2';
+import { createClient } from "@supabase/supabase-js";
+import dotenv from "dotenv";
 
-const db = mysql.createConnection({
-  host: process.env.DB_HOST,
-  port: process.env.DB_PORT || 3306,
-  user: process.env.DB_USER,
-  password: process.env.DB_PASSWORD,
-  database: process.env.DB_NAME
-});
+dotenv.config();
 
-db.connect((err) => {
-  if (err) {
-    console.error('Database connection failed:', err);
-  } else {
-    console.log('✅ Connected to MySQL!');
-  }
-});
+const supabaseUrl = process.env.SUPABASE_URL;
+const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY;
 
-export default db;
+export const supabase =
+  supabaseUrl && supabaseKey ? createClient(supabaseUrl, supabaseKey) : null;
+
+if (!supabase) {
+  console.warn("Supabase client not initialized. Check SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY.");
+}
+
+export default supabase;

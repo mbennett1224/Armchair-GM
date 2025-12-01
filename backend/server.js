@@ -1,13 +1,8 @@
 import express from "express";
 import cors from "cors";
 import fetch from "node-fetch";
-import mysql from "mysql2";
 import dotenv from "dotenv";
-import axios from "axios";
-import cron from "node-cron";
-import fs from "fs";
-import { exec } from "child_process";
-
+import supabase from "./db/connection.js";
 
 dotenv.config();
 
@@ -18,33 +13,9 @@ app.use(cors());
 app.use(express.json());
 
 // -------------------------
-// MySQL connection
-// -------------------------
-const db = mysql.createConnection({
-  host: process.env.DB_HOST,
-  port: process.env.DB_PORT || 3306,
-  user: process.env.DB_USER,
-  password: process.env.DB_PASSWORD,
-  database: process.env.DB_NAME
-});
-
-db.connect((err) => {
-  if (err) {
-    console.error("❌ Database connection failed:", err);
-  } else {
-    console.log("✅ Connected to MySQL!");
-  }
-});
-
-// -------------------------------------------
-// AUTO-UPDATE FREE AGENTS WEEKLY (ESPN SCRAPER)
-// -------------------------------------------
-
-
-// -------------------------
 // GET all MLB teams
 // -------------------------
-app.get("/api/teams", async (req, res) => {
+app.get("/api/teams", async (_req, res) => {
   try {
     const response = await fetch("https://statsapi.mlb.com/api/v1/teams?sportId=1");
     const data = await response.json();
@@ -72,7 +43,6 @@ app.get("/api/teams/:id/players", async (req, res) => {
   const teamId = req.params.id;
 
   try {
-    // Best hydrate chain for LIVE stats
     const response = await fetch(
       `https://statsapi.mlb.com/api/v1/teams/${teamId}/roster/rosterFull` +
       `?hydrate=person(stats(group=[hitting,pitching],type=[season]))`
@@ -84,7 +54,7 @@ app.get("/api/teams/:id/players", async (req, res) => {
       return res.status(404).json({ error: "No roster data found." });
     }
 
-    const players = data.roster.map((player) => {
+    const mlbPlayers = data.roster.map((player) => {
       const p = player.person;
 
       const hittingStats = p.stats?.find((s) => s.group?.displayName === "hitting")?.splits?.[0]?.stat || {};
@@ -96,8 +66,8 @@ app.get("/api/teams/:id/players", async (req, res) => {
         position: player.position?.abbreviation || "",
         positionName: player.position?.name || "",
         jerseyNumber: player.jerseyNumber || "",
-        batSide: p.batSide?.code || "—",
-        pitchHand: p.pitchHand?.code || "—",
+        batSide: p.batSide?.code || "",
+        pitchHand: p.pitchHand?.code || "",
         stats: {
           // Hitting
           avg: hittingStats.avg || null,
@@ -120,70 +90,150 @@ app.get("/api/teams/:id/players", async (req, res) => {
       };
     });
 
-    res.json(players);
+    // Pull any signed players stored in Supabase for this teamId
+    let storedPlayers = [];
+    if (supabase) {
+      try {
+        const { data: stored, error: storedErr } = await supabase
+          .from("players")
+          .select("playerid, name, position, team, war, ops, era, age")
+          .eq("team", String(teamId));
+
+        if (storedErr) {
+          console.warn("Supabase roster load error:", storedErr);
+        } else if (stored && stored.length) {
+          storedPlayers = stored.map((sp, idx) => {
+            const key = sp.playerid ?? idx;
+            return {
+              id: `FA-${key}`,
+              name: sp.name || "Unknown",
+              position: sp.position || "",
+              positionName: sp.position || "",
+              jerseyNumber: "",
+              batSide: "",
+              pitchHand: "",
+              stats: {
+                war: sp.war ?? null,
+                ops: sp.ops ?? null,
+                era: sp.era ?? null
+              },
+              raw: sp
+            };
+          });
+        }
+      } catch (e) {
+        console.warn("Supabase roster merge failed:", e);
+      }
+    }
+
+    res.json([...mlbPlayers, ...storedPlayers]);
   } catch (error) {
     console.error("Error fetching players/stats:", error);
     res.status(500).json({ error: "Failed to fetch player stats" });
   }
 });
 
+// -------------------------
+// GET free agents from Supabase
+// -------------------------
+app.get("/api/freeagents", async (_req, res) => {
+  if (!supabase) {
+    return res.status(500).json({ error: "Supabase not configured on server" });
+  }
 
-app.get("/api/freeagents", (req, res) => {
   try {
-    if (!fs.existsSync("free_agents.json")) {
-      console.error("❌ free_agents.json not found!");
-      return res.status(500).json({ error: "free_agents.json is missing" });
+    const { data, error } = await supabase
+      .from("players")
+      .select("playerid, name, position, team, war, ops, era, salary, age")
+      .or('team.is.null,team.eq."Free Agent"');
+
+    if (error) {
+      console.error("Supabase error loading free agents:", error);
+      return res.status(500).json({ error: "Could not load free agents" });
     }
 
-    let data = JSON.parse(fs.readFileSync("free_agents.json", "utf8"));
+    const normalized = (data || []).map((p, index) => {
+      const key = p.playerid ?? index;
+      return {
+        id: `FA-${key}`,
+        name: p.name || "Unknown",
+        position: p.position || "N/A",
+        team: p.team || "Free Agent",
+        age: p.age ?? null,
+        war: p.war ?? null,
+        ops: p.ops ?? null,
+        era: p.era ?? null,
+        salary: p.salary ?? null,
+        raw: p
+      };
+    });
 
-    // 🔍 Ensure data is an array
-    if (!Array.isArray(data)) {
-      console.error("❌ free_agents.json is not an array!");
-      return res.status(500).json({ error: "Invalid free_agents.json format" });
-    }
-
-    // 🧹 Remove bad or unknown entries
-    data = data.filter(p =>
-      p &&
-      p.name &&
-      p.name.trim() !== "" &&
-      p.name.toLowerCase() !== "unknown player"
-    );
-
-    console.log(`📁 Serving ${data.length} free agents from file.`);
-
-    return res.json(data);
-
+    return res.json(normalized);
   } catch (err) {
-    console.error("❌ Error reading free_agents.json:", err);
+    console.error("Error reading Supabase free agents:", err);
     return res.status(500).json({ error: "Could not load free agents" });
   }
 });
+
 // -------------------------
-// Update roster (future DB use)
+// Update roster (persist to Supabase)
 // -------------------------
-app.post("/api/roster/update", (req, res) => {
+app.post("/api/roster/update", async (req, res) => {
+  if (!supabase) {
+    return res.status(500).json({ error: "Supabase not configured on server" });
+  }
+
   const { teamId, position, player } = req.body;
 
-  console.log("Roster update:", { teamId, position, player });
+  try {
+    const playerIdNumber = Number(
+      typeof player?.id === "string" ? player.id.replace(/^FA-/, "") : player?.id ?? player?.raw?.playerid
+    );
+    const payload = {
+      name: player?.name || "Unknown",
+      position: position || player?.position || null,
+      team: teamId ? String(teamId) : null,
+      // prefer stats object, then top-level, then raw payload
+      war: player?.stats?.war ?? player?.war ?? player?.raw?.war ?? null,
+      ops: player?.stats?.ops ?? player?.ops ?? player?.raw?.ops ?? null,
+      era: player?.stats?.era ?? player?.era ?? player?.raw?.era ?? null,
+      age: player?.age ?? player?.raw?.age ?? null
+    };
 
-  // Always succeed — free agents & MLB players
-  return res.json({
-    success: true,
-    message: "Player signed",
-    teamId,
-    position,
-    player
-  });
+    if (!Number.isNaN(playerIdNumber)) {
+      payload.playerid = playerIdNumber;
+    }
+
+    const { data, error } = await supabase
+      .from("players")
+      .upsert(payload, { onConflict: "playerid" })
+      .select()
+      .maybeSingle();
+
+    if (error) {
+      console.error("Supabase roster update error:", error);
+      return res.status(500).json({ error: "Failed to persist roster change" });
+    }
+
+    return res.json({
+      success: true,
+      message: "Player signed",
+      teamId,
+      position,
+      player: data
+    });
+  } catch (err) {
+    console.error("Roster update error:", err);
+    return res.status(500).json({ error: "Failed to persist roster change" });
+  }
 });
 
 // -------------------------
-app.get("/", (req, res) => {
-  res.send("⚾ Armchair GM API is running!");
+app.get("/", (_req, res) => {
+  res.send("Armchair GM API is running!");
 });
 // -------------------------
 
 app.listen(PORT, () => {
-  console.log(`🚀 Server running on http://localhost:${PORT}`);
+  console.log(`Server running on http://localhost:${PORT}`);
 });
