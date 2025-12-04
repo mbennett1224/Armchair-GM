@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 450">
+  <defs>
+    <style>
+      .grass { fill: #78c340; }
+      .infield-dirt { fill: #dcb67b; }
+      .line { fill: none; stroke: white; stroke-width: 2; }
+      .base { fill: white; }
+      .label { fill: white; font-family: Arial, sans-serif; font-size: 12px; text-anchor: middle; font-weight: bold; }
+      .dugout { fill: white; }
+    </style>
+  </defs>
+
+  <rect width="600" height="450" class="grass"/>
+  
+  <path d="M 150 225 L 300 75 L 450 225 L 300 375 Z" class="infield-dirt" transform="scale(1.2) translate(-50,0)"/>
+  
+  <path d="M 200 225 L 300 125 L 400 225 L 300 325 Z" class="grass"/>
+
+  <line x1="300" y1="375" x2="0" y2="75" class="line"/>
+  <line x1="300" y1="375" x2="600" y2="75" class="line"/>
+
+  <rect x="295" y="365" width="10" height="10" class="base" transform="rotate(45 300 370)"/>
+  <rect x="395" y="220" width="10" height="10" class="base"/>
+  <rect x="295" y="120" width="10" height="10" class="base"/>
+  <rect x="195" y="220" width="10" height="10" class="base"/>
+  <circle cx="300" cy="225" r="15" class="infield-dirt"/>
+  <rect x="296" y="223" width="8" height="4" class="base"/>
+
+  <rect x="285" y="375" width="30" height="20" class="infield-dirt"/>
+
+  <rect x="150" y="260" width="30" height="15" class="dugout"/>
+  <rect x="420" y="260" width="30" height="15" class="dugout"/>
+
+  <text x="300" y="410" class="label">Catcher</text>
+  <text x="300" y="250" class="label">Pitcher</text>
+  <text x="410" y="190" class="label">First Baseman</text>
+  <text x="360" y="140" class="label">Second Baseman</text>
+  <text x="240" y="140" class="label">Shortstop</text>
+  <text x="190" y="190" class="label">Third Baseman</text>
+  <text x="120" y="110" class="label">Left Fielder</text>
+  <text x="480" y="110" class="label">Right Fielder</text>
+</svg>
